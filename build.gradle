@@ -39,5 +39,8 @@ dependencies {
     compile "io.ktor:ktor-gson:$ktor_version"
     compile "io.ktor:ktor-client-core:$ktor_version"
     compile "io.ktor:ktor-client-core-jvm:$ktor_version"
+    compile "me.liuwj.ktorm:ktorm-core:$ktorm_version"
+    compile "me.liuwj.ktorm:ktorm-support-mysql:$ktorm_version"
+    compile 'mysql:mysql-connector-java:8.0.18'
     testCompile "io.ktor:ktor-server-tests:$ktor_version"
 }
