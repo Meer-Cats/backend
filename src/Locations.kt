@@ -1,6 +1,8 @@
 package fr.prayfortalent
 
 import io.ktor.locations.Location
+import java.util.*
+import kotlin.collections.ArrayList
 
 @Location("/session")
 class Session {
@@ -8,11 +10,29 @@ class Session {
     class Login {
         // Post data
         data class Data(val mail: String, val password: String)
-        data class Return(val mail: String, val name: String, val avatar: String)
+        data class Return(val mail: String, val name: String, val avatar: String, val isHR: Boolean)
     }
 
     @Location("/logout")
     class Logout
+}
+
+@Location("/search")
+class Search {
+    data class Data(val skills: ArrayList<String>)
+    data class ReturnSingle(val name: String, val surname: String, val mail: String, val photo: String)
+}
+
+@Location("/invite")
+class Invite {
+    data class Data(val employee: List<String>, val subject: String, val body: String, val inviteDate: Date)
+    data class Return(val message: String)
+}
+
+@Location("")
+class t {
+    data class Data(val employee: List<String>)
+    data class Return(val message: String)
 }
 
 @Location("/type/{name}")

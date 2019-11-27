@@ -1,5 +1,6 @@
 package fr.prayfortalent
 
+import fr.prayfortalent.model.Employee
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.application.install
@@ -21,10 +22,7 @@ import io.ktor.util.InternalAPI
 import io.ktor.util.encodeBase64
 import io.ktor.util.hex
 import me.liuwj.ktorm.database.Database
-import me.liuwj.ktorm.dsl.and
-import me.liuwj.ktorm.dsl.eq
-import me.liuwj.ktorm.dsl.select
-import me.liuwj.ktorm.dsl.where
+import me.liuwj.ktorm.dsl.*
 import java.io.File
 import kotlin.collections.set
 
@@ -91,12 +89,14 @@ fun Application.module(testing: Boolean = false) {
 
                 call.sessions.set(SessionT(email = data.mail))
 
-                Session.Login.Return(
-                    employee[Employee.email]!!,
-                    employee[Employee.name]!!,
-                    employee[Employee.photo]!!.encodeBase64()).let {
-                    call.respond(it)
-                }
+                call.respond(
+                    Session.Login.Return(
+                        employee[Employee.email]!!,
+                        employee[Employee.name]!!,
+                        employee[Employee.photo]!!.encodeBase64(),
+                        employee[Employee.is_humanresources] ?: false
+                    )
+                )
             }
         }
 
@@ -104,6 +104,30 @@ fun Application.module(testing: Boolean = false) {
             if (call.sessions.get<SessionT>() != null)
                 call.sessions.clear<SessionT>()
             call.respond("")
+        }
+
+
+        get<Invite> {
+            val data = call.receiveOrNull<Invite.Data>()
+                ?: return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+            // sendMail(data.truc)
+        }
+
+        get<Search> {
+            val data = call.receiveOrNull<Search.Data>()
+                ?: return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+
+            Employee.select()
+                .orderBy(*data.skills.map { skill -> Employee["hs_$skill"].desc() }.toTypedArray())
+                .limit(0, 10)
+                .map {
+                    Search.ReturnSingle(
+                        it[Employee.name] ?: "NO NAME",
+                        it[Employee.surname] ?: "NO SURNAME",
+                        it[Employee.email] ?: "NO EMAIL",
+                        it[Employee.photo]?.encodeBase64() ?: ""
+                    )
+                }.let { call.respond(it) }
         }
 
         // Register nested routes

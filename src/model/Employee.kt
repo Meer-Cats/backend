@@ -1,9 +1,6 @@
-package fr.prayfortalent
+package fr.prayfortalent.model
 
-import me.liuwj.ktorm.schema.Table
-import me.liuwj.ktorm.schema.blob
-import me.liuwj.ktorm.schema.int
-import me.liuwj.ktorm.schema.varchar
+import me.liuwj.ktorm.schema.*
 
 object Employee : Table<Nothing>("employee") {
     val name by varchar("name")
@@ -16,4 +13,5 @@ object Employee : Table<Nothing>("employee") {
     val email by varchar("email").primaryKey()
     val photo by blob("photo")
     val password by varchar("password")
+    val is_humanresources by boolean("is_humanresources")
 }
