@@ -16,6 +16,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.default
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
+import io.ktor.locations.KtorExperimentalLocationsAPI
 import io.ktor.locations.Locations
 import io.ktor.locations.get
 import io.ktor.locations.post
@@ -28,6 +29,7 @@ import io.ktor.util.encodeBase64
 import io.ktor.util.hex
 import me.liuwj.ktorm.database.Database
 import me.liuwj.ktorm.dsl.*
+import me.liuwj.ktorm.schema.Column
 import java.io.File
 import java.time.Duration
 import java.util.*
@@ -35,6 +37,7 @@ import kotlin.collections.set
 
 fun main(args: Array<String>): Unit = io.ktor.server.tomcat.EngineMain.main(args)
 
+@KtorExperimentalLocationsAPI
 @InternalAPI
 @Suppress("unused") // Referenced in application.conf
 @kotlin.jvm.JvmOverloads
@@ -43,7 +46,7 @@ fun Application.module(testing: Boolean = false) {
         throw Exception("Invalid DB or IP for mysql server")
     Database.connect(
         "jdbc:mysql://$MYSQLIP:3306/$MYSQLDB",
-        driver = "com.mysql.jdbc.Driver",
+        driver = "com.mysql.cj.jdbc.Driver",
         user = USER,
         password = PASS
     )
@@ -108,15 +111,17 @@ fun Application.module(testing: Boolean = false) {
             "PFT_SESSION",
             directorySessionStorage(File(".sessions"), cached = false)
         ) {
+            // serializer = SessionSerializerReflection(SessionT::class)
             cookie.extensions["SameSite"] = "Lax"
             cookie.path = "/" // Specify cookie's path '/' so it can be used in the whole site
-
+/*
             transform(
                 SessionTransportTransformerMessageAuthentication(
                     key,
                     "HmacSHA256"
                 )
             ) // sign the ID that travels to client
+ */
         }
     }
 
@@ -133,7 +138,7 @@ fun Application.module(testing: Boolean = false) {
         }
 
         post<Session.Login> {
-            val data = ca   ll.receiveOrNull<Session.Login.Data>()
+            val data = call.receiveOrNull<Session.Login.Data>()
 
             if (data == null || !data.valid())
                 return@post call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
@@ -148,7 +153,7 @@ fun Application.module(testing: Boolean = false) {
             else {
                 val employee = q.first()
 
-                call.sessions.set(SessionT(email = data.mail, gotQuestions = mutableListOf()))
+                call.sessions.set(SessionT(email = data.mail, gotQuestionskey = listOf(), gotQuestionsSkill = listOf()))
 
                 Session.Login.Return(
                     employee[Employee.email]!!,
@@ -176,7 +181,13 @@ fun Application.module(testing: Boolean = false) {
             val key = UUID.randomUUID().toString()
             val message = "Who would you ask for help if you had a question about ${skill.s} ?"
 
-            session.gotQuestions.add(Question(skill, key))
+            call.sessions.set(
+                SessionT(
+                    session.email,
+                    session.gotQuestionskey.plus(key),
+                    session.gotQuestionsSkill.plus(skill)
+                )
+            )
             call.respond(Employees.Recommend.Return(key, message))
         }
 
@@ -189,10 +200,21 @@ fun Application.module(testing: Boolean = false) {
             if (data == null || !data.valid())
                 return@post call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
 
-            val matchingQuestion = session.gotQuestions.firstOrNull { it.key == data.key }
-                ?: return@post call.respond(HttpStatusCode.Forbidden, "Wrong Key")
+            val matchingQuestion = (session.gotQuestionskey.zip(session.gotQuestionsSkill as List<*>).find {
+                it.first == data.key
+            }?.second ?: error("Not Found")) as Skill
 
-            // Employee[]
+
+                // .map { fromMap(it) }.firstOrNull { it.key == data.key }
+
+            val e = Employee.update {
+                (it[((if (matchingQuestion.isHard) "hs_" else "ss_") + matchingQuestion.s)]  as Column<Int>) to
+                        (it[((if (matchingQuestion.isHard) "hs_" else "ss_") + matchingQuestion.s)] as Column<Int>) + 1
+
+                where { Employee.email eq data.employee }
+            }
+
+
         }
 
         get<Employees.Invite> {
@@ -200,6 +222,8 @@ fun Application.module(testing: Boolean = false) {
 
             if (data == null || !data.valid())
                 return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+
+            call.respond(Employees.Invite.Return("accepted"))
         }
 
         get<Employees.Search> { data ->
@@ -222,7 +246,7 @@ fun Application.module(testing: Boolean = false) {
                         it[Employee.name] ?: "NO NAME",
                         it[Employee.surname] ?: "NO SURNAME",
                         it[Employee.email] ?: "NO EMAIL",
-                        it[Employee.photo]?.encodeBase64() ?: ""
+                        "" //it[Employee.photo]?.encodeBase64() ?: ""
                     )
                 }.let { call.respond(it) }
         }
@@ -236,7 +260,7 @@ fun Application.module(testing: Boolean = false) {
                             it[Employee.email] ?: "NO EMAIL",
                             it[Employee.surname] ?: "NO SURNAME",
                             it[Employee.name] ?: "NO NAME",
-                            it[Employee.photo]?.encodeBase64() ?: ""
+                            ""//it[Employee.photo]?.encodeBase64() ?: ""
                         )
                     }
             )
@@ -244,6 +268,8 @@ fun Application.module(testing: Boolean = false) {
     }
 }
 
-data class SessionT(val email: String, val gotQuestions: MutableList<Question>)
+data class SessionT(val email: String, val gotQuestionskey : List<String>, val gotQuestionsSkill: List<Any>)
 data class Question(val skill: Skill, val key: String)
+fun fromMap(map: Map<String, Any>) =
+    Question(map["skill"] as Skill, map["key"] as String)
 

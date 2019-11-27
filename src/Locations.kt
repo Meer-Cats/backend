@@ -28,9 +28,8 @@ class Session {
 @Location("/employee")
 class Employees {
     @Location("/search")
-    class Search(val skills: ArrayList<String>) : CheckedData() {
+    class Search(val skills: Array<String>) : CheckedData() {
         override fun valid() = skills != null
-
 
         data class ReturnSingle(val name: String, val surname: String, val mail: String, val photo: String)
     }
