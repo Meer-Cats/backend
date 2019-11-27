@@ -29,6 +29,11 @@ class Invite {
     data class Return(val message: String)
 }
 
+@Location("/all")
+class AllEmployee{
+    data class Return(val surname: String, val name: String, val avatar: String)
+}
+
 @Location("")
 class t {
     data class Data(val employee: List<String>)

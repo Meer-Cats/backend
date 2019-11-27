@@ -4,8 +4,11 @@ import fr.prayfortalent.model.Employee
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.application.install
+import io.ktor.features.CORS
 import io.ktor.features.ContentNegotiation
 import io.ktor.gson.gson
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
@@ -14,7 +17,6 @@ import io.ktor.locations.get
 import io.ktor.locations.post
 import io.ktor.request.receiveOrNull
 import io.ktor.response.respond
-import io.ktor.response.respondText
 import io.ktor.routing.get
 import io.ktor.routing.routing
 import io.ktor.sessions.*
@@ -24,6 +26,7 @@ import io.ktor.util.hex
 import me.liuwj.ktorm.database.Database
 import me.liuwj.ktorm.dsl.*
 import java.io.File
+import java.time.Duration
 import kotlin.collections.set
 
 fun main(args: Array<String>): Unit = io.ktor.server.tomcat.EngineMain.main(args)
@@ -42,6 +45,16 @@ fun Application.module(testing: Boolean = false) {
     )
 
     install(Locations) {
+    }
+
+    install(CORS) {
+        method(HttpMethod.Options)
+        header(HttpHeaders.XForwardedProto)
+        anyHost()
+
+        allowCredentials = true
+        allowNonSimpleContentTypes = true
+        maxAge = Duration.ofDays(1)
     }
 
     install(Sessions) {
@@ -89,14 +102,14 @@ fun Application.module(testing: Boolean = false) {
 
                 call.sessions.set(SessionT(email = data.mail))
 
-                call.respond(
-                    Session.Login.Return(
-                        employee[Employee.email]!!,
-                        employee[Employee.name]!!,
-                        employee[Employee.photo]!!.encodeBase64(),
-                        employee[Employee.is_humanresources] ?: false
-                    )
-                )
+                Session.Login.Return(
+                    employee[Employee.email]!!,
+                    employee[Employee.name]!!,
+                    employee[Employee.photo]!!.encodeBase64(),
+                    employee[Employee.is_humanresources] ?: false
+                ).let {
+                    call.respond(it)
+                }
             }
         }
 
@@ -131,11 +144,17 @@ fun Application.module(testing: Boolean = false) {
         }
 
         // Register nested routes
-        get<Type.Edit> {
-            call.respondText("Inside $it")
-        }
-        get<Type.List> {
-            call.respondText("Inside $it")
+        get<AllEmployee> {
+            call.respond(
+                Employee.select(listOf(Employee.surname, Employee.name, Employee.photo))
+                    .map {
+                        AllEmployee.Return(
+                            it[Employee.surname] ?: "NO SURNAME",
+                            it[Employee.name] ?: "NO NAME",
+                            it[Employee.photo]?.encodeBase64() ?: ""
+                        )
+                    }
+            )
         }
 
         get("/session/increment") {
