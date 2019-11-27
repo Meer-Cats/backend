@@ -15,3 +15,11 @@ object Employee : Table<Nothing>("employee") {
     val password by varchar("password")
     val is_humanresources by boolean("is_humanresources")
 }
+
+enum class Skill(val s: String, val isHard: Boolean) {
+    PYTHON("Python", true),
+    JAVA("Java", true),
+    JAVASCRIPT("Javascript", true),
+    SCRUM("Scrum", false),
+    MANAGEMENT("Management", false),
+}

@@ -1,15 +1,23 @@
+@file:Suppress("SENSELESS_COMPARISON")
+
 package fr.prayfortalent
 
 import io.ktor.locations.Location
 import java.util.*
-import kotlin.collections.ArrayList
+
+abstract class CheckedData {
+    abstract fun valid(): Boolean
+}
 
 @Location("/session")
 class Session {
     @Location("/login")
     class Login {
         // Post data
-        data class Data(val mail: String, val password: String)
+        data class Data(val mail: String, val password: String) : CheckedData() {
+            override fun valid() = mail != null && password != null
+        }
+
         data class Return(val mail: String, val name: String, val avatar: String, val isHR: Boolean)
     }
 
@@ -17,36 +25,39 @@ class Session {
     class Logout
 }
 
-@Location("/search")
-class Search {
-    data class Data(val skills: ArrayList<String>)
-    data class ReturnSingle(val name: String, val surname: String, val mail: String, val photo: String)
-}
+@Location("/employee")
+class Employees {
+    @Location("/search")
+    class Search(val skills: ArrayList<String>) : CheckedData() {
+        override fun valid() = skills != null
 
-@Location("/invite")
-class Invite {
-    data class Data(val employee: List<String>, val subject: String, val body: String, val inviteDate: Date)
-    data class Return(val message: String)
-}
 
-@Location("/all")
-class AllEmployee{
-    data class Return(val surname: String, val name: String, val avatar: String)
-}
+        data class ReturnSingle(val name: String, val surname: String, val mail: String, val photo: String)
+    }
 
-@Location("")
-class t {
-    data class Data(val employee: List<String>)
-    data class Return(val message: String)
-}
+    @Location("/invite")
+    class Invite {
+        data class Data(val employee: List<String>, val subject: String, val body: String, val inviteDate: Date) :
+            CheckedData() {
+            override fun valid() = employee != null && subject != null && body != null && inviteDate != null
+        }
 
-@Location("/type/{name}")
-data class Type(val name: String) {
-    @Location("/edit")
-    data class Edit(val type: Type)
+        data class Return(val message: String)
+    }
 
-    @Location("/list/{page}")
-    data class List(val type: Type, val page: Int)
+    @Location("/recommend")
+    class Recommend {
+        data class Data(val key: String, val employee: String) : CheckedData() {
+            override fun valid() = employee != null && key != null
+        }
+
+        data class Return(val key: String, val message: String)
+    }
+
+    @Location("/all")
+    class AllEmployee {
+        data class Return(val mail: String, val surname: String, val name: String, val avatar: String)
+    }
 }
 
 

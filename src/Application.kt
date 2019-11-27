@@ -1,15 +1,19 @@
 package fr.prayfortalent
 
 import fr.prayfortalent.model.Employee
+import fr.prayfortalent.model.Skill
 import io.ktor.application.Application
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.CORS
+import io.ktor.features.CallLogging
 import io.ktor.features.ContentNegotiation
+import io.ktor.features.DefaultHeaders
 import io.ktor.gson.gson
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.default
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
 import io.ktor.locations.Locations
@@ -17,7 +21,6 @@ import io.ktor.locations.get
 import io.ktor.locations.post
 import io.ktor.request.receiveOrNull
 import io.ktor.response.respond
-import io.ktor.routing.get
 import io.ktor.routing.routing
 import io.ktor.sessions.*
 import io.ktor.util.InternalAPI
@@ -27,6 +30,7 @@ import me.liuwj.ktorm.database.Database
 import me.liuwj.ktorm.dsl.*
 import java.io.File
 import java.time.Duration
+import java.util.*
 import kotlin.collections.set
 
 fun main(args: Array<String>): Unit = io.ktor.server.tomcat.EngineMain.main(args)
@@ -44,17 +48,57 @@ fun Application.module(testing: Boolean = false) {
         password = PASS
     )
 
-    install(Locations) {
-    }
+    // This adds Date and Server headers to each response, and allows custom additional headers
+    install(DefaultHeaders)
+    // This uses use the logger to log every call (request/response)
+    install(CallLogging)
+
+    install(Locations)
 
     install(CORS) {
-        method(HttpMethod.Options)
-        header(HttpHeaders.XForwardedProto)
+        // method(HttpMethod.Options)
+        method(HttpMethod.Get)
+        method(HttpMethod.Post)
+        method(HttpMethod.Put)
+        method(HttpMethod.Delete)
+        method(HttpMethod.Patch)
+        header(HttpHeaders.AccessControlAllowHeaders)
+        header(HttpHeaders.ContentType)
+        header(HttpHeaders.AccessControlAllowOrigin)
+        allowCredentials = true
         anyHost()
+        maxAge = Duration.ofDays(1)
+        // method(HttpMethod.Options)
+        /*
+        header(HttpHeaders.XForwardedProto)
+        exposeHeader(HttpHeaders.AccessControlAllowOrigin)
+        method(HttpMethod.Options)
+        method(HttpMethod.Get)
+        method(HttpMethod.Post)
+        method(HttpMethod.Head)
+
+        anyHost()
+
+
 
         allowCredentials = true
         allowNonSimpleContentTypes = true
         maxAge = Duration.ofDays(1)
+         */
+        /*
+        header(HttpHeaders.AccessControlAllowOrigin)
+        header(HttpHeaders.AccessControlAllowMethods)
+        header(HttpHeaders.AccessControlAllowHeaders)
+
+
+        anyHost()
+        host("localhost:4200")
+
+        allowCredentials = true
+        allowNonSimpleContentTypes = true
+
+        maxAge = Duration.ofDays(1)
+        */
     }
 
     install(Sessions) {
@@ -62,10 +106,11 @@ fun Application.module(testing: Boolean = false) {
 
         cookie<SessionT>(
             "PFT_SESSION",
-            directorySessionStorage(File(".sessions"), cached = true)
+            directorySessionStorage(File(".sessions"), cached = false)
         ) {
-            cookie.extensions["SameSite"] = "lax"
+            cookie.extensions["SameSite"] = "Lax"
             cookie.path = "/" // Specify cookie's path '/' so it can be used in the whole site
+
             transform(
                 SessionTransportTransformerMessageAuthentication(
                     key,
@@ -82,13 +127,16 @@ fun Application.module(testing: Boolean = false) {
 
     routing {
         // Put Angular Here
-        static("/s") {
+        static {
+            default("static/index.html")
             resources("static")
         }
 
         post<Session.Login> {
-            val data = call.receiveOrNull<Session.Login.Data>()
-                ?: return@post call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+            val data = ca   ll.receiveOrNull<Session.Login.Data>()
+
+            if (data == null || !data.valid())
+                return@post call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
 
             val q = Employee.select()
                 .where {
@@ -100,7 +148,7 @@ fun Application.module(testing: Boolean = false) {
             else {
                 val employee = q.first()
 
-                call.sessions.set(SessionT(email = data.mail))
+                call.sessions.set(SessionT(email = data.mail, gotQuestions = mutableListOf()))
 
                 Session.Login.Return(
                     employee[Employee.email]!!,
@@ -119,22 +167,58 @@ fun Application.module(testing: Boolean = false) {
             call.respond("")
         }
 
+        // Generate a request
+        get<Employees.Recommend> {
+            val session = call.sessions.get<SessionT>()
+                ?: return@get call.respond(HttpStatusCode.Forbidden, "Invalid session")
 
-        get<Invite> {
-            val data = call.receiveOrNull<Invite.Data>()
-                ?: return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
-            // sendMail(data.truc)
+            val skill = Skill.values().random()
+            val key = UUID.randomUUID().toString()
+            val message = "Who would you ask for help if you had a question about ${skill.s} ?"
+
+            session.gotQuestions.add(Question(skill, key))
+            call.respond(Employees.Recommend.Return(key, message))
         }
 
-        get<Search> {
-            val data = call.receiveOrNull<Search.Data>()
-                ?: return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+        // Send a recommendation
+        post<Employees.Recommend> {
+            val session = call.sessions.get<SessionT>()
+                ?: return@post call.respond(HttpStatusCode.Forbidden, "Invalid session")
+            val data = call.receiveOrNull<Employees.Recommend.Data>()
+
+            if (data == null || !data.valid())
+                return@post call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+
+            val matchingQuestion = session.gotQuestions.firstOrNull { it.key == data.key }
+                ?: return@post call.respond(HttpStatusCode.Forbidden, "Wrong Key")
+
+            // Employee[]
+        }
+
+        get<Employees.Invite> {
+            val data = call.receiveOrNull<Employees.Invite.Data>()
+
+            if (data == null || !data.valid())
+                return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+        }
+
+        get<Employees.Search> { data ->
+            if (!data.valid())
+                return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
 
             Employee.select()
-                .orderBy(*data.skills.map { skill -> Employee["hs_$skill"].desc() }.toTypedArray())
+                .orderBy(*data.skills.map { skill ->
+
+                    val enumedSkill = Skill.values()
+                        .firstOrNull { it.s.toLowerCase() == skill.toLowerCase() }
+                        ?: Skill.JAVA
+
+                    val r = (if (enumedSkill.isHard) "hs" else "ss") + (enumedSkill.s.toLowerCase())
+                    Employee[r].desc()
+                }.toTypedArray())
                 .limit(0, 10)
                 .map {
-                    Search.ReturnSingle(
+                    Employees.Search.ReturnSingle(
                         it[Employee.name] ?: "NO NAME",
                         it[Employee.surname] ?: "NO SURNAME",
                         it[Employee.email] ?: "NO EMAIL",
@@ -144,11 +228,12 @@ fun Application.module(testing: Boolean = false) {
         }
 
         // Register nested routes
-        get<AllEmployee> {
+        get<Employees.AllEmployee> {
             call.respond(
-                Employee.select(listOf(Employee.surname, Employee.name, Employee.photo))
+                Employee.select(listOf(Employee.surname, Employee.name, Employee.photo, Employee.email))
                     .map {
-                        AllEmployee.Return(
+                        Employees.AllEmployee.Return(
+                            it[Employee.email] ?: "NO EMAIL",
                             it[Employee.surname] ?: "NO SURNAME",
                             it[Employee.name] ?: "NO NAME",
                             it[Employee.photo]?.encodeBase64() ?: ""
@@ -156,14 +241,9 @@ fun Application.module(testing: Boolean = false) {
                     }
             )
         }
-
-        get("/session/increment") {
-        }
-
-        get("/json/gson") {
-        }
     }
 }
 
-data class SessionT(val email: String)
+data class SessionT(val email: String, val gotQuestions: MutableList<Question>)
+data class Question(val skill: Skill, val key: String)
 
