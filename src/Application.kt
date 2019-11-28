@@ -13,9 +13,7 @@ import io.ktor.gson.gson
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.content.default
-import io.ktor.http.content.resources
-import io.ktor.http.content.static
+import io.ktor.http.content.*
 import io.ktor.locations.KtorExperimentalLocationsAPI
 import io.ktor.locations.Locations
 import io.ktor.locations.get
@@ -132,9 +130,9 @@ fun Application.module(testing: Boolean = false) {
 
     routing {
         // Put Angular Here
-        static {
-            default("static/index.html")
-            resources("static")
+        static ("/"){
+            staticRootFolder = File("static")
+            default("index.html")
         }
 
         post<Session.Login> {
@@ -202,19 +200,19 @@ fun Application.module(testing: Boolean = false) {
 
             val matchingQuestion = (session.gotQuestionskey.zip(session.gotQuestionsSkill as List<*>).find {
                 it.first == data.key
-            }?.second ?: error("Not Found")) as Skill
+            }?.second ?: Skill.values().random()) as Skill
 
 
                 // .map { fromMap(it) }.firstOrNull { it.key == data.key }
 
-            val e = Employee.update {
-                (it[((if (matchingQuestion.isHard) "hs_" else "ss_") + matchingQuestion.s)]  as Column<Int>) to
-                        (it[((if (matchingQuestion.isHard) "hs_" else "ss_") + matchingQuestion.s)] as Column<Int>) + 1
+            Employee.update {
+                (it[((if (matchingQuestion.isHard) "hs_" else "ss_") + matchingQuestion.s.toLowerCase())]  as Column<Int>) to
+                        (it[((if (matchingQuestion.isHard) "hs_" else "ss_") + matchingQuestion.s.toLowerCase())] as Column<Int>) + 1
 
                 where { Employee.email eq data.employee }
             }
 
-
+            call.respond(HttpStatusCode.OK, "")
         }
 
         post<Employees.Invite> {
