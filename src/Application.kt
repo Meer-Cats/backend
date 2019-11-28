@@ -217,11 +217,11 @@ fun Application.module(testing: Boolean = false) {
 
         }
 
-        get<Employees.Invite> {
+        post<Employees.Invite> {
             val data = call.receiveOrNull<Employees.Invite.Data>()
 
             if (data == null || !data.valid())
-                return@get call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
+                return@post call.respond(HttpStatusCode.NotAcceptable, "Invalid Call")
 
             call.respond(Employees.Invite.Return("accepted"))
         }
